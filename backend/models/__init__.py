@@ -1,6 +1,5 @@
-from .base import db
-from .salesforce_object import SalesforceObject
-from .salesforce_record import SalesforceRecord
+from .base import db, BaseModel
+from .lead import Lead
 from .sync_log import SyncLog
- 
-__all__ = ['db', 'SalesforceObject', 'SalesforceRecord', 'SyncLog'] 
+
+__all__ = ['db', 'BaseModel', 'Lead', 'SyncLog'] 

@@ -72,20 +72,81 @@ api.interceptors.response.use(
 // Export the api instance for use in components
 export { api };
 
-// Salesforce Status and Objects - Used by SalesforceConnector
-export const getSalesforceStatus = async () => {
+interface Lead {
+  Id: string;
+  Name: string;
+  Title?: string;
+  Email?: string;
+  Phone?: string;
+  Company?: string;
+  Status?: string;
+  LeadSource?: string;
+  LastActivityDate?: string;
+  last_sync?: string;
+}
+
+interface SalesforceStatusResponse {
+  status: 'connected' | 'error' | 'unauthenticated';
+  organization?: string;
+  sample_objects?: string[];
+  message?: string;
+}
+
+interface SalesforceObjectsResponse {
+  objects: Array<{
+    name: string;
+    label: string;
+    custom: boolean;
+  }>;
+}
+
+interface SyncStatus {
+  object_type: string;
+  latest_sync?: {
+    id: number;
+    sync_type: string;
+    status: string;
+    start_time: string;
+    end_time?: string;
+    records_processed: number;
+    records_created: number;
+    records_updated: number;
+    records_deleted: number;
+  };
+  recent_logs: Array<{
+    id: number;
+    sync_type: string;
+    status: string;
+    start_time: string;
+    end_time?: string;
+    records_processed: number;
+    error_message?: string;
+  }>;
+  total_leads: number;
+}
+
+export const getSalesforceStatus = async (): Promise<SalesforceStatusResponse> => {
   const response = await api.get('/salesforce/status');
   return response.data;
 };
 
-export const getSalesforceObjects = async () => {
+export const getSalesforceObjects = async (): Promise<SalesforceObjectsResponse> => {
   const response = await api.get('/salesforce/objects');
   return response.data;
 };
 
-// Leads API - Used by LeadsTable
-export const getLeads = async () => {
+export const getLeads = async (): Promise<{ records: Lead[]; count: number; source: string }> => {
   const response = await api.get('/leads');
+  return response.data;
+};
+
+export const syncLeads = async (syncType: 'full' | 'incremental' = 'incremental') => {
+  const response = await api.post('/sync/leads', { sync_type: syncType });
+  return response.data;
+};
+
+export const getSyncStatus = async (): Promise<SyncStatus> => {
+  const response = await api.get('/sync/status');
   return response.data;
 };
 
@@ -93,6 +154,8 @@ const apiExports = {
   getSalesforceStatus,
   getSalesforceObjects,
   getLeads,
+  syncLeads,
+  getSyncStatus,
 };
 
 export default apiExports; 

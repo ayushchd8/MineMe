@@ -1,4 +1,4 @@
 from .salesforce_service import SalesforceService
-from .sync_service import SyncService
- 
-__all__ = ['SalesforceService', 'SyncService'] 
+from .lead_sync_service import LeadSyncService
+
+__all__ = ['SalesforceService', 'LeadSyncService'] 

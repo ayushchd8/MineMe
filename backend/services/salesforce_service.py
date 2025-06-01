@@ -113,6 +113,42 @@ class SalesforceService:
             self.logger.error(f"Error fetching updated records for {object_name}: {str(e)}")
             return []
     
+    def get_updated_records_since(self, object_name, last_sync_time, fields):
+        """Get records updated since the last sync time with specific fields."""
+        if not self.sf:
+            if not self.connect():
+                return []
+        
+        try:
+            # Convert datetime to SOQL format
+            if last_sync_time:
+                # Format date for SOQL (Salesforce expects ISO format)
+                last_sync_str = last_sync_time.strftime('%Y-%m-%dT%H:%M:%SZ')
+            else:
+                # If no last sync time, get all records
+                last_sync_str = '1970-01-01T00:00:00Z'
+            
+            # Build SOQL query with specific fields
+            fields_str = ', '.join(fields)
+            query = f"SELECT {fields_str} FROM {object_name} WHERE LastModifiedDate >= {last_sync_str} ORDER BY LastModifiedDate ASC"
+            
+            self.logger.info(f"Executing SOQL query: {query}")
+            
+            # Execute query
+            result = self.sf.query_all(query)
+            records = result['records']
+            
+            # Remove attributes from each record
+            for record in records:
+                record.pop('attributes', None)
+            
+            self.logger.info(f"Retrieved {len(records)} updated records")
+            return records
+            
+        except Exception as e:
+            self.logger.error(f"Error fetching updated records for {object_name}: {str(e)}")
+            return []
+    
     def get_deleted_records(self, object_name, start_date, end_date=None):
         """Get records deleted between start_date and end_date."""
         if not self.sf:

@@ -14,6 +14,10 @@ import hashlib
 import base64
 import secrets
 
+# Import our models and services
+from models import db, Lead, SyncLog
+from services.lead_sync_service import LeadSyncService
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -26,16 +30,23 @@ load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'your-secret-key-change-in-production')
 
-# Load configuration
-config_name = os.environ.get('FLASK_ENV', 'development')
-app.config.from_object(config[config_name])
+# Configure database
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'postgresql://username:password@localhost:5432/mineme')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Configure Salesforce OAuth
+app.config['SF_CONSUMER_KEY'] = os.environ.get('SF_CONSUMER_KEY')
+app.config['SF_CONSUMER_SECRET'] = os.environ.get('SF_CONSUMER_SECRET')
+app.config['SF_REDIRECT_URI'] = os.environ.get('SF_REDIRECT_URI', 'http://localhost:5001/api/auth/callback')
+app.config['SF_DOMAIN'] = os.environ.get('SF_DOMAIN', 'login')
+
+# Initialize database
+db.init_app(app)
 
 # Enable CORS
 CORS(app, supports_credentials=True)
-
-# Configure database
-db = SQLAlchemy(app)
 
 # Store OAuth states and tokens (in production, use Redis or database)
 oauth_states = {}
@@ -137,6 +148,41 @@ class SalesforceService:
             return result['records']
         except Exception as e:
             logger.error(f"Error fetching records for {object_name}: {str(e)}")
+            return []
+    
+    def get_updated_records_since(self, object_name, last_sync_time, fields):
+        """Get records updated since the last sync time with specific fields."""
+        if not self.sf:
+            return []
+        
+        try:
+            # Convert datetime to SOQL format
+            if last_sync_time:
+                # Format date for SOQL (Salesforce expects ISO format)
+                last_sync_str = last_sync_time.strftime('%Y-%m-%dT%H:%M:%SZ')
+            else:
+                # If no last sync time, get all records
+                last_sync_str = '1970-01-01T00:00:00Z'
+            
+            # Build SOQL query with specific fields
+            fields_str = ', '.join(fields)
+            query = f"SELECT {fields_str} FROM {object_name} WHERE LastModifiedDate >= {last_sync_str} ORDER BY LastModifiedDate ASC"
+            
+            logger.info(f"Executing SOQL query: {query}")
+            
+            # Execute query
+            result = self.sf.query_all(query)
+            records = result['records']
+            
+            # Remove attributes from each record
+            for record in records:
+                record.pop('attributes', None)
+            
+            logger.info(f"Retrieved {len(records)} updated records")
+            return records
+            
+        except Exception as e:
+            logger.error(f"Error fetching updated records for {object_name}: {str(e)}")
             return []
 
 # OAuth Routes
@@ -481,7 +527,24 @@ def list_salesforce_objects():
 
 @app.route('/api/leads')
 def get_leads():
-    """Get Lead records from Salesforce."""
+    """Get Lead records from local database."""
+    try:
+        leads = Lead.get_all_active()
+        return jsonify({
+            'records': [lead.to_dict() for lead in leads],
+            'count': len(leads),
+            'source': 'database'
+        })
+    except Exception as e:
+        logger.error(f"Error fetching leads from database: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f"Failed to get Lead records: {str(e)}"
+        }), 500
+
+@app.route('/api/sync/leads', methods=['POST'])
+def sync_leads():
+    """Manually trigger lead synchronization."""
     sf_service = get_current_sf_service()
     
     if not sf_service:
@@ -491,21 +554,114 @@ def get_leads():
         }), 401
     
     try:
-        logger.info("Attempting to fetch leads from Salesforce")
-        records = sf_service.get_all_records('Lead', [
-            'Id', 'Name', 'Title', 'Email', 'Phone', 'Company', 
-            'Status', 'LeadSource', 'LastActivityDate'
-        ])
-        logger.info(f"Successfully fetched {len(records)} lead records")
+        # Get sync type from request (default to incremental)
+        sync_type = request.json.get('sync_type', 'incremental') if request.json else 'incremental'
+        
+        # Create lead sync service
+        lead_sync = LeadSyncService(sf_service)
+        
+        # Perform sync
+        result = lead_sync.sync_leads(sync_type=sync_type)
+        
         return jsonify({
-            'records': records,
-            'count': len(records)
+            'status': 'success',
+            'message': f'Lead sync completed successfully',
+            'sync_type': sync_type,
+            'result': result
         })
+        
     except Exception as e:
+        logger.error(f"Error during lead sync: {str(e)}")
         return jsonify({
             'status': 'error',
-            'message': f"Failed to get Lead records: {str(e)}"
+            'message': f"Lead sync failed: {str(e)}"
         }), 500
+
+@app.route('/api/sync/status')
+def sync_status():
+    """Get synchronization status and recent logs."""
+    try:
+        # Get recent sync logs
+        recent_logs = SyncLog.get_recent_logs('Lead', limit=5)
+        latest_sync = SyncLog.get_latest_successful_sync('Lead')
+        
+        return jsonify({
+            'object_type': 'Lead',
+            'latest_sync': latest_sync.to_dict() if latest_sync else None,
+            'recent_logs': [log.to_dict() for log in recent_logs],
+            'total_leads': Lead.query.filter_by(is_deleted=False).count()
+        })
+    except Exception as e:
+        logger.error(f"Error getting sync status: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f"Failed to get sync status: {str(e)}"
+        }), 500
+
+# Create database tables
+with app.app_context():
+    db.create_all()
+    logger.info("Database tables created/verified")
+
+# Debug endpoints to inspect database data
+@app.route('/api/debug/leads')
+def debug_leads():
+    """Debug endpoint to view all leads in database."""
+    if not app.debug:
+        return jsonify({'error': 'Debug endpoint only available in development mode'}), 403
+    
+    try:
+        leads = Lead.get_all_active()
+        return jsonify({
+            'total_leads': len(leads),
+            'leads': [lead.to_dict() for lead in leads]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/debug/sync-logs')
+def debug_sync_logs():
+    """Debug endpoint to view sync logs."""
+    if not app.debug:
+        return jsonify({'error': 'Debug endpoint only available in development mode'}), 403
+    
+    try:
+        logs = SyncLog.get_recent_logs('Lead', limit=20)
+        return jsonify({
+            'total_logs': len(logs),
+            'logs': [log.to_dict() for log in logs]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/debug/database-stats')
+def debug_database_stats():
+    """Debug endpoint to view database statistics."""
+    if not app.debug:
+        return jsonify({'error': 'Debug endpoint only available in development mode'}), 403
+    
+    try:
+        total_leads = Lead.query.count()
+        active_leads = Lead.query.filter_by(is_deleted=False).count()
+        deleted_leads = Lead.query.filter_by(is_deleted=True).count()
+        total_sync_logs = SyncLog.query.count()
+        successful_syncs = SyncLog.query.filter_by(status='completed').count()
+        failed_syncs = SyncLog.query.filter_by(status='failed').count()
+        
+        return jsonify({
+            'leads': {
+                'total': total_leads,
+                'active': active_leads,
+                'deleted': deleted_leads
+            },
+            'sync_logs': {
+                'total': total_sync_logs,
+                'successful': successful_syncs,
+                'failed': failed_syncs
+            }
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)

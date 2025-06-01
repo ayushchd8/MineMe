@@ -33,6 +33,9 @@ const SalesforceConnector: React.FC = () => {
           
           // Fetch available objects
           fetchObjects();
+        } else if (data.status === 'unauthenticated') {
+          setStatus('error');
+          setMessage('Please authenticate with Salesforce first');
         } else {
           setStatus('error');
           setMessage(`Connection error: ${data.message || 'Unknown error'}`);

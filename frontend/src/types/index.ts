@@ -1,7 +1,7 @@
 // Lead interface - Used by LeadsTable
 export interface Lead {
-  Id?: string;
-  Name?: string;
+  Id: string;
+  Name: string;
   Title?: string;
   Email?: string;
   Phone?: string;
@@ -9,6 +9,7 @@ export interface Lead {
   Status?: string;
   LeadSource?: string;
   LastActivityDate?: string;
+  last_sync?: string;
 }
 
 // Salesforce Status Response - Used by SalesforceConnector
@@ -23,11 +24,27 @@ export interface SalesforceStatusResponse {
 export interface SalesforceObjectsResponse {
   objects: Array<{
     name: string;
-    api_name: string;
-    is_queryable: boolean;
-    is_searchable: boolean;
-    is_createable: boolean;
-    is_updateable: boolean;
-    is_deletable: boolean;
+    label: string;
+    custom: boolean;
   }>;
+}
+
+export interface SyncLog {
+  id: number;
+  sync_type: string;
+  status: string;
+  start_time: string;
+  end_time?: string;
+  records_processed: number;
+  records_created: number;
+  records_updated: number;
+  records_deleted: number;
+  error_message?: string;
+}
+
+export interface SyncStatus {
+  object_type: string;
+  latest_sync?: SyncLog;
+  recent_logs: SyncLog[];
+  total_leads: number;
 } 
