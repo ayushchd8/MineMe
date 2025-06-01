@@ -6,7 +6,6 @@ import logging
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
-from config import config
 import uuid
 import requests
 from urllib.parse import urlencode
@@ -143,7 +142,7 @@ class SalesforceService:
             return []
         try:
             fields_str = ', '.join(fields)
-            query = f"SELECT {fields_str} FROM {object_name} LIMIT 100"
+            query = f"SELECT {fields_str} FROM {object_name}"
             result = self.sf.query_all(query)
             return result['records']
         except Exception as e:

@@ -1,34 +1,63 @@
-# MineMe
+# MineMe - Salesforce Lead Management System
 
-A web application for syncing and managing Salesforce data with OAuth authentication.
+A clean, modern web application for syncing and managing Salesforce leads with automatic background synchronization.
 
-## Project Structure
+## 🚀 Features
 
-- `frontend/`: React frontend application with TypeScript and Tailwind CSS
-- `backend/`: Flask API server that connects to Salesforce with OAuth
+- **OAuth Authentication** - Secure Salesforce login with PKCE
+- **Automatic Sync** - Initial full sync + incremental sync every 60 seconds
+- **Local Storage** - PostgreSQL database for fast lead access
+- **Real-time UI** - React with Tailwind CSS for modern interface
+- **Manual Controls** - Full sync and incremental sync buttons
+- **Sync Monitoring** - Visual indicators and sync status tracking
 
-## Setup and Running Instructions
+## 🏗️ Architecture
+
+### Backend (Flask)
+- **OAuth-based Salesforce integration** with session management
+- **PostgreSQL database** for lead storage and sync logs
+- **RESTful API** for frontend communication
+- **Debug endpoints** for database inspection
+
+### Frontend (React + TypeScript)
+- **Modern React** with hooks and context
+- **Tailwind CSS** for styling
+- **Automatic sync** with visual feedback
+- **Responsive design** for all devices
+
+## 📁 Project Structure
+
+```
+MineMe/
+├── backend/
+│   ├── app.py                 # Main Flask application with OAuth
+│   ├── models/
+│   │   ├── base.py           # Database base model
+│   │   ├── lead.py           # Lead model with Salesforce mapping
+│   │   └── sync_log.py       # Sync operation tracking
+│   ├── services/
+│   │   └── lead_sync_service.py  # Lead synchronization logic
+│   └── requirements.txt      # Python dependencies
+└── frontend/
+    ├── src/
+    │   ├── components/       # React components
+    │   ├── contexts/         # React context (Auth)
+    │   ├── api/             # API communication
+    │   └── types/           # TypeScript interfaces
+    └── package.json         # Node.js dependencies
+```
+
+## 🛠️ Setup
 
 ### Prerequisites
-
 - Python 3.8+
-- Node.js 14+
+- Node.js 16+
 - Docker (for PostgreSQL database)
-- Salesforce Connected App with OAuth credentials
+- Salesforce Connected App (OAuth)
 
-### Backend Setup
+### Database Setup (PostgreSQL with Docker)
 
-1. Navigate to the backend directory:
-```
-cd backend
-```
-
-2. Install dependencies:
-```
-pip install -r requirements.txt
-```
-
-3. Set up PostgreSQL using Docker:
+1. **Start PostgreSQL container:**
 ```bash
 # Create and start PostgreSQL container
 docker run --name mineme-postgres \
@@ -39,13 +68,30 @@ docker run --name mineme-postgres \
   -d postgres:14
 ```
 
-4. Create a `.env` file with your configuration:
-```env
+2. **Container management commands:**
+```bash
+# Start existing container
+docker start mineme-postgres
+
+# Stop container
+docker stop mineme-postgres
+
+# View logs
+docker logs mineme-postgres
+
+# Connect to database directly
+docker exec -it mineme-postgres psql -U mineme -d salesforce_sync
+```
+
+### Backend Setup
+```bash
+cd backend
+pip install -r requirements.txt
+
+# Create .env file with your configuration
+cat > .env << EOF
 # Flask Configuration
-FLASK_APP=app.py
-FLASK_ENV=development
-FLASK_DEBUG=True
-SECRET_KEY=mineme-sf-sync-secret-key
+FLASK_SECRET_KEY=your-secret-key-change-in-production
 
 # Database Configuration (Docker PostgreSQL)
 DATABASE_URL=postgresql://mineme:mineme123@localhost:5433/salesforce_sync
@@ -55,96 +101,45 @@ SF_CONSUMER_KEY=your_salesforce_consumer_key
 SF_CONSUMER_SECRET=your_salesforce_consumer_secret
 SF_REDIRECT_URI=http://localhost:5001/api/auth/callback
 SF_DOMAIN=login
-```
+EOF
 
-5. Run the Flask application:
-```
+# Start the Flask server
 python app.py
 ```
 
-The server will start at http://localhost:5001
-
 ### Frontend Setup
-
-1. Navigate to the frontend directory:
-```
+```bash
 cd frontend
-```
-
-2. Install dependencies:
-```
 npm install
-```
 
-3. Create a `.env` file:
-```
-REACT_APP_API_URL=http://localhost:5001/api
-```
+# Create .env file (optional - uses defaults)
+echo "REACT_APP_API_URL=http://localhost:5001/api" > .env
 
-4. Start the development server:
-```
+# Start the development server
 npm start
 ```
 
-The frontend will be available at http://localhost:3000
+### Salesforce Connected App Setup
 
-## Database Management
+To use OAuth authentication, you need to create a Connected App in Salesforce:
 
-### PostgreSQL Docker Container
-
-The application uses PostgreSQL running in a Docker container:
-
-```bash
-# Start the container
-docker start mineme-postgres
-
-# Stop the container
-docker stop mineme-postgres
-
-# View container logs
-docker logs mineme-postgres
-
-# Connect to database directly
-docker exec -it mineme-postgres psql -U mineme -d salesforce_sync
-
-# Remove container (if needed)
-docker rm -f mineme-postgres
-```
-
-### Container Details
-- **Container Name**: `mineme-postgres`
-- **Database**: `salesforce_sync`
-- **Username**: `mineme`
-- **Password**: `mineme123`
-- **Host Port**: `5433` (mapped to container port 5432)
-
-## Features
-
-- **OAuth Authentication**: Secure Salesforce login with OAuth 2.0
-- **Browse Salesforce Objects**: View available Salesforce objects
-- **Data Synchronization**: Sync Salesforce records to local database
-- **Dashboard**: View sync status and statistics
-- **API Endpoints**: RESTful API for frontend integration
-
-## Salesforce Setup
-
-### Creating a Connected App
-
-1. Log in to Salesforce at https://login.salesforce.com
-2. Go to Setup → Apps → App Manager
-3. Click "New Connected App"
-4. Fill in the required fields:
-   - **Connected App Name**: MineMe Sync
-   - **API Name**: MineMe_Sync
-   - **Contact Email**: your_email@example.com
-5. Enable OAuth Settings:
-   - **Callback URL**: `http://localhost:5001/api/auth/callback`
-   - **Selected OAuth Scopes**: 
+1. **Log in to Salesforce** at https://login.salesforce.com
+2. **Go to Setup** → Apps → App Manager
+3. **Click "New Connected App"**
+4. **Fill in basic information:**
+   - Connected App Name: `MineMe Sync`
+   - API Name: `MineMe_Sync`
+   - Contact Email: `your_email@example.com`
+5. **Enable OAuth Settings:**
+   - Callback URL: `http://localhost:5001/api/auth/callback`
+   - Selected OAuth Scopes:
      - Access and manage your data (api)
      - Perform requests on your behalf at any time (refresh_token, offline_access)
-6. Save and note the **Consumer Key** and **Consumer Secret**
+6. **Save and get credentials:**
+   - Copy the **Consumer Key** and **Consumer Secret**
+   - Add them to your `.env` file
 
-## API Endpoints
+## 🔧 API Endpoints
 
 ### Authentication
 - `GET /api/auth/login` - Initiate OAuth flow
@@ -152,51 +147,101 @@ docker rm -f mineme-postgres
 - `GET /api/auth/status` - Check authentication status
 - `POST /api/auth/logout` - Logout user
 
-### Salesforce Integration
-- `GET /api/salesforce/status` - Check Salesforce connection
-- `GET /api/salesforce/objects` - List available Salesforce objects
-- `GET /api/objects` - Get registered sync objects
-- `GET /api/leads` - Get Lead records
+### Data Management
+- `GET /api/leads` - Get leads from local database
+- `POST /api/sync/leads` - Trigger manual sync
+- `GET /api/sync/status` - Get sync status and logs
 
-### Synchronization
-- `GET /api/sync/status` - Get sync status for all objects
-- `GET /api/sync/logs` - Get sync logs
-- `POST /api/sync/object/<id>` - Sync specific object
-- `POST /api/sync/all` - Sync all active objects
+### Debug (Development only)
+- `GET /api/debug/leads` - View all leads in database
+- `GET /api/debug/sync-logs` - View sync operation logs
+- `GET /api/debug/database-stats` - Database statistics
 
-## Usage
+## 🔄 Sync Behavior
 
-1. Open http://localhost:3000 in your browser
-2. Click "Connect to Salesforce" to start OAuth flow
-3. Login to Salesforce and authorize the application
-4. Browse available Salesforce objects
-5. Configure and run synchronization
-6. View synchronized records and status
+1. **First Visit**: Automatic full sync to populate database
+2. **Background Sync**: Incremental sync every 60 seconds
+3. **Manual Sync**: Full or incremental sync on demand
+4. **Smart Fallback**: Incremental sync falls back to full sync if needed
 
-## Troubleshooting
+## 🎯 Key Benefits
 
-### Authentication Issues
-- Verify your Salesforce Connected App credentials
-- Check the callback URL matches your Connected App settings
-- Ensure you're using the correct Salesforce domain (login vs test)
+- **Performance**: Local database eliminates API wait times
+- **Reliability**: Data available even if Salesforce is down
+- **Efficiency**: Incremental sync minimizes API usage
+- **User Experience**: Real-time feel with automatic updates
 
-### Database Issues
-- Ensure Docker is running: `docker ps`
-- Check if PostgreSQL container is running: `docker logs mineme-postgres`
-- Verify database connection string in `.env` file
+## 🚀 Usage
 
-### Container Issues
+1. Visit http://localhost:3000
+2. Click "Login with Salesforce" to authenticate
+3. Navigate to "Dashboard" to view leads
+4. Data syncs automatically every minute
+5. Use manual sync buttons for immediate updates
+
+## 🔍 Database Inspection
+
+Use debug endpoints to inspect stored data:
 ```bash
-# If port 5433 is busy, use a different port:
-docker run --name mineme-postgres -p 5434:5432 ...
+# View database statistics
+curl http://localhost:5001/api/debug/database-stats
 
-# Then update DATABASE_URL in .env:
-DATABASE_URL=postgresql://mineme:mineme123@localhost:5434/salesforce_sync
+# View all leads
+curl http://localhost:5001/api/debug/leads
+
+# View sync logs
+curl http://localhost:5001/api/debug/sync-logs
 ```
 
-### Development
-- For development: Use `FLASK_ENV=development`
+## 🐛 Troubleshooting
 
-## License
+### Docker Issues
+```bash
+# Check if Docker is running
+docker ps
 
-MIT 
+# Check if PostgreSQL container exists
+docker ps -a | grep mineme-postgres
+
+# If port 5433 is busy, use a different port
+docker run --name mineme-postgres -p 5434:5432 ... 
+# Then update DATABASE_URL: postgresql://mineme:mineme123@localhost:5434/salesforce_sync
+
+# Remove and recreate container if needed
+docker rm -f mineme-postgres
+# Then run the docker run command again
+```
+
+### Authentication Issues
+- Verify Salesforce Connected App credentials in `.env`
+- Check callback URL matches: `http://localhost:5001/api/auth/callback`
+- Ensure you're using correct Salesforce domain (`login` vs `test`)
+- Check browser console for OAuth errors
+
+### Database Connection Issues
+```bash
+# Test database connection
+docker exec -it mineme-postgres psql -U mineme -d salesforce_sync -c "SELECT 1;"
+
+# Check container logs for errors
+docker logs mineme-postgres
+
+# Restart container if needed
+docker restart mineme-postgres
+```
+
+### API Issues
+```bash
+# Test backend health
+curl http://localhost:5001/api/health
+
+# Check backend logs for errors
+# (Backend runs in terminal - check console output)
+
+# Test authentication status
+curl http://localhost:5001/api/auth/status
+```
+
+## 📝 License
+
+MIT License - see LICENSE file for details. 
