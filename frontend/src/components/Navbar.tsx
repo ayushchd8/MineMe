@@ -25,18 +25,6 @@ const Navbar: React.FC = () => {
               >
                 Dashboard
               </Link>
-              <Link
-                to="/objects"
-                className="text-white hover:text-gray-200 px-3 py-2 rounded-md text-sm font-medium"
-              >
-                Objects
-              </Link>
-              <Link
-                to="/records"
-                className="text-white hover:text-gray-200 px-3 py-2 rounded-md text-sm font-medium"
-              >
-                Records
-              </Link>
             </div>
           </div>
         </div>

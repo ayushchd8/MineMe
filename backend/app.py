@@ -362,34 +362,11 @@ def get_current_sf_service():
     
     return None
 
-# Simple database models
-class SalesforceObject(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255), nullable=False)
-    api_name = db.Column(db.String(255), nullable=False, unique=True)
-    description = db.Column(db.Text, nullable=True)
-    is_active = db.Column(db.Boolean, default=True)
-    last_sync_time = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'name': self.name,
-            'api_name': self.api_name,
-            'description': self.description,
-            'is_active': self.is_active,
-            'last_sync_time': self.last_sync_time.isoformat() if self.last_sync_time else None,
-            'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat()
-        }
-
 # API routes
-    @app.route('/api/health')
-    def health_check():
-        """Health check endpoint."""
-        return jsonify({'status': 'ok'})
+@app.route('/api/health')
+def health_check():
+    """Health check endpoint."""
+    return jsonify({'status': 'ok'})
 
 @app.route('/api/debug/tokens')
 def debug_tokens():
@@ -431,10 +408,24 @@ def salesforce_status():
     try:
         # Get basic information
         sf = sf_service.sf
-        about_info = sf.describe()
-        org_name = about_info.get('organizationName', 'Unknown')
+        
+        # Get organization information using SOQL query
+        try:
+            org_query = "SELECT Name, Id FROM Organization LIMIT 1"
+            org_result = sf.query(org_query)
+            org_name = org_result['records'][0]['Name'] if org_result['records'] else 'Unknown Organization'
+        except Exception as e:
+            logger.warning(f"Could not fetch organization name: {str(e)}")
+            # Fallback: try to get from user identity info
+            try:
+                identity_url = sf.sf_instance + sf.sf_version + 'chatter/users/me'
+                identity_response = sf.restful('chatter/users/me')
+                org_name = identity_response.get('companyName', 'Unknown Organization')
+            except:
+                org_name = 'Unknown Organization'
         
         # Get a few objects
+        about_info = sf.describe()
         objects = about_info.get('sobjects', [])[:5]
         object_names = [obj.get('name') for obj in objects]
         
@@ -448,14 +439,6 @@ def salesforce_status():
             'status': 'error',
             'message': f"Connected but failed to get Salesforce information: {str(e)}"
         }), 500
-
-@app.route('/api/objects')
-def get_objects():
-    """Get all registered Salesforce objects."""
-    objects = SalesforceObject.query.all()
-    return jsonify({
-        'objects': [obj.to_dict() for obj in objects]
-    })
 
 @app.route('/api/salesforce/objects')
 def list_salesforce_objects():
@@ -496,92 +479,6 @@ def list_salesforce_objects():
             'message': f"Failed to get Salesforce objects: {str(e)}"
         }), 500
 
-@app.route('/api/sync/status')
-def sync_status():
-    """Get synchronization status for all objects."""
-    objects = SalesforceObject.query.all()
-    
-    # For this simple app, we'll just return basic status without actual sync logs
-    result = []
-    for obj in objects:
-        status = {
-            "object": {
-                "id": obj.id,
-                "name": obj.name,
-                "api_name": obj.api_name
-            },
-            "last_sync_time": obj.last_sync_time.isoformat() if obj.last_sync_time else None,
-            # Simplified since we don't have actual sync logs yet
-            "latest_sync": {
-                "status": "completed",
-                "records_created": 0,
-                "records_updated": 0,
-                "records_deleted": 0
-            } if obj.last_sync_time else None
-        }
-        result.append(status)
-    
-    return jsonify({"objects": result})
-
-@app.route('/api/sync/logs')
-def sync_logs():
-    """Get synchronization logs."""
-    # For this simple app, we'll just return an empty array
-    return jsonify({
-        "logs": [],
-        "total": 0,
-        "offset": 0,
-        "limit": 20
-    })
-
-@app.route('/api/sync/object/<int:object_id>', methods=['POST'])
-def sync_object(object_id):
-    """Synchronize a specific object."""
-    sf_service = get_current_sf_service()
-    
-    if not sf_service:
-        return jsonify({
-            'status': 'unauthenticated',
-            'message': 'Please authenticate with Salesforce first'
-        }), 401
-    
-    obj = SalesforceObject.query.get_or_404(object_id)
-    
-    # Update the last sync time
-    obj.last_sync_time = datetime.utcnow()
-    db.session.commit()
-    
-    return jsonify({
-        'status': 'success',
-        'message': f'Synchronization completed for {obj.name}',
-        'object': obj.to_dict()
-    })
-
-@app.route('/api/sync/all', methods=['POST'])
-def sync_all_objects():
-    """Synchronize all registered objects."""
-    sf_service = get_current_sf_service()
-    
-    if not sf_service:
-        return jsonify({
-            'status': 'unauthenticated',
-            'message': 'Please authenticate with Salesforce first'
-        }), 401
-    
-    objects = SalesforceObject.query.filter_by(is_active=True).all()
-    
-    # Update last sync time for all objects
-    for obj in objects:
-        obj.last_sync_time = datetime.utcnow()
-    
-    db.session.commit()
-    
-    return jsonify({
-        'status': 'success',
-        'message': f'Synchronization completed for {len(objects)} objects',
-        'synced_objects': [obj.to_dict() for obj in objects]
-    })
-
 @app.route('/api/leads')
 def get_leads():
     """Get Lead records from Salesforce."""
@@ -609,10 +506,6 @@ def get_leads():
             'status': 'error',
             'message': f"Failed to get Lead records: {str(e)}"
         }), 500
-
-# Create database tables
-with app.app_context():
-    db.create_all()
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)

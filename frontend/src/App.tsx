@@ -3,9 +3,6 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Navbar from './components/Navbar';
 import Dashboard from './components/Dashboard';
-import ObjectsList from './components/ObjectsList';
-import RegisterObject from './components/RegisterObject';
-import RecordsList from './components/RecordsList';
 import SalesforceConnector from './components/SalesforceConnector';
 import LoginButton from './components/LoginButton';
 
@@ -38,9 +35,6 @@ const ProtectedApp: React.FC = () => {
           <Routes>
             <Route path="/" element={<SalesforceConnector />} />
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/objects" element={<ObjectsList />} />
-            <Route path="/objects/register" element={<RegisterObject />} />
-            <Route path="/records/object/:objectId" element={<RecordsList />} />
           </Routes>
         ) : (
           <div className="text-center py-12">
