@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+import { getLeads } from '../api';
 
 interface Lead {
   Name: string;
@@ -24,8 +22,8 @@ const LeadsTable: React.FC = () => {
     if (manual) setRefreshing(true);
     setError(null);
     try {
-      const response = await axios.get(`${API_BASE_URL}/leads`);
-      setLeads(response.data.leads || []);
+      const response = await getLeads();
+      setLeads(response.records || []);
       const now = new Date();
       setLastUpdated(now);
       setSecondsSinceUpdate(0);

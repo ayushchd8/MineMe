@@ -1,13 +1,20 @@
 # MineMe
 
-A web application for syncing and managing Salesforce data.
+A web application for syncing and managing Salesforce data with OAuth authentication.
 
 ## Project Structure
 
 - `frontend/`: React frontend application with TypeScript and Tailwind CSS
-- `backend/`: Flask API server that connects to Salesforce
+- `backend/`: Flask API server that connects to Salesforce with OAuth
 
 ## Setup and Running Instructions
+
+### Prerequisites
+
+- Python 3.8+
+- Node.js 14+
+- Docker (for PostgreSQL database)
+- Salesforce Connected App with OAuth credentials
 
 ### Backend Setup
 
@@ -21,18 +28,38 @@ cd backend
 pip install -r requirements.txt
 ```
 
-3. Create a `.env` file with your Salesforce credentials:
-```
-SF_USERNAME=your_salesforce_username
-SF_PASSWORD=your_salesforce_password
-SF_SECURITY_TOKEN=your_salesforce_security_token
-SF_DOMAIN=login
-DATABASE_URL=postgresql://username:password@localhost:5432/mineme
+3. Set up PostgreSQL using Docker:
+```bash
+# Create and start PostgreSQL container
+docker run --name mineme-postgres \
+  -e POSTGRES_PASSWORD=mineme123 \
+  -e POSTGRES_DB=salesforce_sync \
+  -e POSTGRES_USER=mineme \
+  -p 5433:5432 \
+  -d postgres:14
 ```
 
-4. Run the Flask application:
+4. Create a `.env` file with your configuration:
+```env
+# Flask Configuration
+FLASK_APP=app.py
+FLASK_ENV=development
+FLASK_DEBUG=True
+SECRET_KEY=mineme-sf-sync-secret-key
+
+# Database Configuration (Docker PostgreSQL)
+DATABASE_URL=postgresql://mineme:mineme123@localhost:5433/salesforce_sync
+
+# Salesforce OAuth Configuration
+SF_CONSUMER_KEY=your_salesforce_consumer_key
+SF_CONSUMER_SECRET=your_salesforce_consumer_secret
+SF_REDIRECT_URI=http://localhost:5001/api/auth/callback
+SF_DOMAIN=login
 ```
-python simple_app.py
+
+5. Run the Flask application:
+```
+python app.py
 ```
 
 The server will start at http://localhost:5001
@@ -61,62 +88,114 @@ npm start
 
 The frontend will be available at http://localhost:3000
 
+## Database Management
+
+### PostgreSQL Docker Container
+
+The application uses PostgreSQL running in a Docker container:
+
+```bash
+# Start the container
+docker start mineme-postgres
+
+# Stop the container
+docker stop mineme-postgres
+
+# View container logs
+docker logs mineme-postgres
+
+# Connect to database directly
+docker exec -it mineme-postgres psql -U mineme -d salesforce_sync
+
+# Remove container (if needed)
+docker rm -f mineme-postgres
+```
+
+### Container Details
+- **Container Name**: `mineme-postgres`
+- **Database**: `salesforce_sync`
+- **Username**: `mineme`
+- **Password**: `mineme123`
+- **Host Port**: `5433` (mapped to container port 5432)
+
 ## Features
 
-- Connect to Salesforce using API credentials
-- Browse and select Salesforce objects for synchronization
-- View and manage synchronized records
-- Configure synchronization settings
-- Dashboard with sync status and statistics
-
-## Requirements
-
-- Python 3.8+
-- Node.js 14+
-- PostgreSQL (optional, SQLite can be used for development)
-- Salesforce account with API access
+- **OAuth Authentication**: Secure Salesforce login with OAuth 2.0
+- **Browse Salesforce Objects**: View available Salesforce objects
+- **Data Synchronization**: Sync Salesforce records to local database
+- **Dashboard**: View sync status and statistics
+- **API Endpoints**: RESTful API for frontend integration
 
 ## Salesforce Setup
 
-### Obtaining a Security Token
+### Creating a Connected App
 
 1. Log in to Salesforce at https://login.salesforce.com
-2. Click on your profile picture/icon, then 'Settings'
-3. In the Quick Find box on the left, type 'Reset Security Token'
-4. Click on 'Reset Security Token'
-5. Check your email for the new security token
-6. Update your `.env` file with the new security token
+2. Go to Setup → Apps → App Manager
+3. Click "New Connected App"
+4. Fill in the required fields:
+   - **Connected App Name**: MineMe Sync
+   - **API Name**: MineMe_Sync
+   - **Contact Email**: your_email@example.com
+5. Enable OAuth Settings:
+   - **Callback URL**: `http://localhost:5001/api/auth/callback`
+   - **Selected OAuth Scopes**: 
+     - Access and manage your data (api)
+     - Perform requests on your behalf at any time (refresh_token, offline_access)
+6. Save and note the **Consumer Key** and **Consumer Secret**
 
-### Allowing API Access
+## API Endpoints
 
-If you don't want to use a security token, you can whitelist your IP address:
+### Authentication
+- `GET /api/auth/login` - Initiate OAuth flow
+- `GET /api/auth/callback` - OAuth callback handler
+- `GET /api/auth/status` - Check authentication status
+- `POST /api/auth/logout` - Logout user
 
-1. Log in to Salesforce
-2. Go to Setup
-3. Search for 'Network Access'
-4. Add your IP address to the trusted IP range
+### Salesforce Integration
+- `GET /api/salesforce/status` - Check Salesforce connection
+- `GET /api/salesforce/objects` - List available Salesforce objects
+- `GET /api/objects` - Get registered sync objects
+- `GET /api/leads` - Get Lead records
+
+### Synchronization
+- `GET /api/sync/status` - Get sync status for all objects
+- `GET /api/sync/logs` - Get sync logs
+- `POST /api/sync/object/<id>` - Sync specific object
+- `POST /api/sync/all` - Sync all active objects
 
 ## Usage
 
 1. Open http://localhost:3000 in your browser
-2. The home page will show the Salesforce connection status
-3. If connected, you can browse available Salesforce objects
-4. Select objects to synchronize
-5. View and manage synchronized records
+2. Click "Connect to Salesforce" to start OAuth flow
+3. Login to Salesforce and authorize the application
+4. Browse available Salesforce objects
+5. Configure and run synchronization
+6. View synchronized records and status
 
 ## Troubleshooting
 
-### Salesforce Connection Issues
-
-- Verify your Salesforce credentials are correct
-- Make sure your security token is up-to-date
-- Check if your IP is allowed in Salesforce
-- Try logging in to Salesforce through the web interface
+### Authentication Issues
+- Verify your Salesforce Connected App credentials
+- Check the callback URL matches your Connected App settings
+- Ensure you're using the correct Salesforce domain (login vs test)
 
 ### Database Issues
+- Ensure Docker is running: `docker ps`
+- Check if PostgreSQL container is running: `docker logs mineme-postgres`
+- Verify database connection string in `.env` file
 
-- For SQLite, ensure the application has write permission to the directory
-- For PostgreSQL, verify connection parameters and database existence
+### Container Issues
+```bash
+# If port 5433 is busy, use a different port:
+docker run --name mineme-postgres -p 5434:5432 ...
+
+# Then update DATABASE_URL in .env:
+DATABASE_URL=postgresql://mineme:mineme123@localhost:5434/salesforce_sync
+```
+
+### Development
+- For development: Use `FLASK_ENV=development`
 
 ## License
 

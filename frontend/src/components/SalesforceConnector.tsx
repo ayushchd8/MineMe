@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
+import { useAuth } from '../contexts/AuthContext';
+import { getSalesforceStatus, getSalesforceObjects } from '../api';
 
 const SalesforceConnector: React.FC = () => {
+  const { isAuthenticated } = useAuth();
   const [status, setStatus] = useState<'loading' | 'connected' | 'error'>('loading');
   const [message, setMessage] = useState<string>('Connecting to Salesforce...');
   const [organizationName, setOrganizationName] = useState<string>('');
@@ -11,14 +11,20 @@ const SalesforceConnector: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      setStatus('error');
+      setMessage('Please authenticate with Salesforce first');
+      return;
+    }
+
     // Check the connection to Salesforce
     const checkConnection = async () => {
       try {
         setStatus('loading');
         setMessage('Checking Salesforce connection...');
+        setError(null);
         
-        const response = await axios.get(`${API_BASE_URL}/salesforce/status`);
-        const data = response.data;
+        const data = await getSalesforceStatus();
         
         if (data.status === 'connected') {
           setStatus('connected');
@@ -34,7 +40,7 @@ const SalesforceConnector: React.FC = () => {
       } catch (err: any) {
         setStatus('error');
         setError(err.message || 'Failed to connect to Salesforce');
-        setMessage(`Error: ${err.response?.data?.message || err.message || 'Unknown error'}`);
+        setMessage(`Error: ${err.response?.data?.message || err.message || 'Please authenticate with Salesforce first'}`);
       }
     };
     
@@ -42,17 +48,34 @@ const SalesforceConnector: React.FC = () => {
       try {
         setMessage('Fetching Salesforce objects...');
         
-        const response = await axios.get(`${API_BASE_URL}/salesforce/objects`);
-        setObjects(response.data.objects || []);
+        const data = await getSalesforceObjects();
+        setObjects(data.objects || []);
         setMessage('Successfully fetched Salesforce objects!');
       } catch (err: any) {
         setError(err.message || 'Failed to fetch Salesforce objects');
-        setMessage(`Error fetching objects: ${err.response?.data?.message || err.message || 'Unknown error'}`);
+        setMessage(`Error fetching objects: ${err.response?.data?.message || err.message || 'Authentication required'}`);
       }
     };
     
     checkConnection();
-  }, []);
+  }, [isAuthenticated]);
+
+  if (!isAuthenticated) {
+    return (
+      <div className="bg-white shadow-md rounded-lg p-6 max-w-4xl mx-auto mt-8">
+        <h2 className="text-2xl font-semibold mb-4">Salesforce Connection Status</h2>
+        <div className="p-4 mb-6 rounded-md bg-yellow-100 text-yellow-800">
+          <div className="flex items-center">
+            <div className="w-3 h-3 rounded-full mr-2 bg-yellow-500"></div>
+            <span className="font-medium">Authentication required</span>
+          </div>
+          <div className="mt-2 text-sm">
+            Please authenticate with Salesforce using the button above to view connection status and available objects.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white shadow-md rounded-lg p-6 max-w-4xl mx-auto mt-8">

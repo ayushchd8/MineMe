@@ -15,6 +15,9 @@ class Config:
     # Salesforce OAuth Configuration
     SF_CONSUMER_KEY = os.environ.get('SF_CONSUMER_KEY') or '3MVG9VMBZCsTL9hmxNA4cJ.i0F0z1BiQSl4FtsaFG.mqlZgIIg4CA7Q9ybNLEf55w2zxS_N9kVJtRyZSnvh3.'
     SF_CONSUMER_SECRET = os.environ.get('SF_CONSUMER_SECRET') or '0F2399B4117FDCECAAF6A86320E3BB6F2F644B5E1C61635CDCBE84B09FA69ADB'
+    # IMPORTANT: This redirect URI must EXACTLY match what's configured in your Salesforce Connected App
+    # In Salesforce Setup → App Manager → [Your App] → View → Callback URL
+    # Alternative: Try 'http://127.0.0.1:5001/api/auth/callback' if localhost doesn't work
     SF_REDIRECT_URI = os.environ.get('SF_REDIRECT_URI') or 'http://localhost:5001/api/auth/callback'
     SF_DOMAIN = os.environ.get('SF_DOMAIN') or 'login'
 
