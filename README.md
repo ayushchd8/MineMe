@@ -32,7 +32,7 @@ DATABASE_URL=postgresql://username:password@localhost:5432/mineme
 
 4. Run the Flask application:
 ```
-python simple_app.py
+python app.py
 ```
 
 The server will start at http://localhost:5001
