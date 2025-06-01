@@ -1,11 +1,11 @@
 import axios from 'axios';
+import { Lead, SalesforceStatusResponse, SalesforceObjectsResponse, SyncStatus } from '../types';
 
-// Create axios instance with base URL
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
 
 // Function to get session ID from various sources
 const getSessionId = (): string | null => {
-  // First check URL parameters (for OAuth callback)
+  // Check URL parameters (for OAuth callback)
   const urlParams = new URLSearchParams(window.location.search);
   const urlSessionId = urlParams.get('session_id');
   if (urlSessionId) {
@@ -27,13 +27,13 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
   withCredentials: true, // Important for session cookies
-  timeout: 10000, // 10 second timeout
+  timeout: 10000,
 });
 
-// Add request interceptor to log requests and include session ID
+// Request interceptor to log requests and include session ID
 api.interceptors.request.use(
   (config) => {
-    // Add session ID to headers if available
+    // Session ID to headers if available
     const sessionId = getSessionId();
     if (sessionId) {
       config.headers['X-Session-ID'] = sessionId;
@@ -71,59 +71,6 @@ api.interceptors.response.use(
 
 // Export the api instance for use in components
 export { api };
-
-interface Lead {
-  Id: string;
-  Name: string;
-  Title?: string;
-  Email?: string;
-  Phone?: string;
-  Company?: string;
-  Status?: string;
-  LeadSource?: string;
-  LastActivityDate?: string;
-  last_sync?: string;
-}
-
-interface SalesforceStatusResponse {
-  status: 'connected' | 'error' | 'unauthenticated';
-  organization?: string;
-  sample_objects?: string[];
-  message?: string;
-}
-
-interface SalesforceObjectsResponse {
-  objects: Array<{
-    name: string;
-    label: string;
-    custom: boolean;
-  }>;
-}
-
-interface SyncStatus {
-  object_type: string;
-  latest_sync?: {
-    id: number;
-    sync_type: string;
-    status: string;
-    start_time: string;
-    end_time?: string;
-    records_processed: number;
-    records_created: number;
-    records_updated: number;
-    records_deleted: number;
-  };
-  recent_logs: Array<{
-    id: number;
-    sync_type: string;
-    status: string;
-    start_time: string;
-    end_time?: string;
-    records_processed: number;
-    error_message?: string;
-  }>;
-  total_leads: number;
-}
 
 export const getSalesforceStatus = async (): Promise<SalesforceStatusResponse> => {
   const response = await api.get('/salesforce/status');
